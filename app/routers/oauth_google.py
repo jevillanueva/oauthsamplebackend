@@ -1,50 +1,36 @@
-import json
+from datetime import timedelta
+from app import configuration
+from app.token import create_access_token
 from fastapi import APIRouter
 from authlib.integrations.starlette_client import OAuth
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse
-import app.configuration as conf
 
 router = APIRouter()
 oauth = OAuth()
 CONF_URL = "https://accounts.google.com/.well-known/openid-configuration"
+ACCESS_TOKEN_EXPIRE_MINUTES = configuration.ACCESS_TOKEN_EXPIRE_MINUTES
 oauth.register(
     name="google",
     server_metadata_url=CONF_URL,
     client_kwargs={"scope": "openid email profile"},
-    client_id=conf.GOOGLE_CLIENT_ID,
-    client_secret=conf.GOOGLE_CLIENT_SECRET,
+    client_id=configuration.GOOGLE_CLIENT_ID,
+    client_secret=configuration.GOOGLE_CLIENT_SECRET,
 )
 
-
-
-@router.route('/')
-async def homepage(request):
-    user = request.session.get('user')
-    if user:
-        data = json.dumps(user)
-        html = (
-            f'<pre>{data}</pre>'
-            '<a href="/google/logout">logout</a>'
-        )
-        return HTMLResponse(html)
-    return HTMLResponse('<a href="/google/login">login</a>')
-
-@router.route("/login")
-async def login(request):
+@router.get("/login")
+async def login(request: Request):
     redirect_uri = request.url_for("auth")
+    print (redirect_uri)
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
-@router.route("/auth")
-async def auth(request):
+@router.get("/auth")
+async def auth(request: Request):
     token = await oauth.google.authorize_access_token(request)
     user = await oauth.google.parse_id_token(request, token)
     print (user)
-    request.session["user"] = dict(user)
-    return RedirectResponse(url="/")
-
-@router.route('/logout')
-async def logout(request: Request):
-    request.session.pop('user', None)
-    return RedirectResponse(url='/')
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"username": user.get("email")}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
