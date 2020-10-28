@@ -7,5 +7,5 @@ Adicionar las variables de entorno al sistema descritas en el archivo [configura
 
 Para ejecutar la aplicación levantar desde uvicorn
 ```sh
-$ uvicorn app.main:app --reload
+$ uvicorn app.main:app --reload --host 0.0.0.0
 ```
