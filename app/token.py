@@ -1,3 +1,5 @@
+from app.models.token import TokenData
+from app.models.user import User, UserInDB
 from app.database import is_revoked, set_revoke_token
 from fastapi.exceptions import HTTPException
 from fastapi import status
@@ -16,28 +18,8 @@ from uuid import uuid4
 SECRET_KEY = configuration.SECRET_KEY
 ALGORITHM = configuration.ALGORITHM
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
 
-
-class TokenData(BaseModel):
-    id: Optional[str]= None
-    username: Optional[str] = None
-
-
-class User(BaseModel):
-    username: str
-    email: Optional[str] = None
-    full_name: Optional[str] = None
-    disabled: Optional[bool] = None
-
-
-class UserInDB(User):
-    hashed_password: str
-
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -64,12 +46,9 @@ def authenticate_user(username: str, password: str):
     return user
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(data: dict, expires_delta: timedelta):
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+    expire = datetime.utcnow() + expires_delta
     to_encode.update({"exp": expire})
     to_encode.update({"id": str(uuid4())})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

@@ -1,18 +1,10 @@
-from fastapi import APIRouter
+from app.models.user import User
+from app.token import get_current_active_user
+from fastapi import APIRouter, Depends
 
 router = APIRouter()
 
 
-@router.get("/users/", tags=["users"])
-async def read_users():
-    return [{"username": "Foo"}, {"username": "Bar"}]
-
-
-@router.get("/users/me", tags=["users"])
-async def read_user_me():
-    return {"username": "fakecurrentuser"}
-
-
-@router.get("/users/{username}", tags=["users"])
-async def read_user(username: str):
-    return {"username": username}
+@router.get("/me", response_model=User)
+async def get_me(current_user: User = Depends(get_current_active_user)):
+    return current_user
