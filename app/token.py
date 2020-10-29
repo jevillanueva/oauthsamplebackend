@@ -1,6 +1,7 @@
-from app.models.token import TokenData
+from app.services.user_service import get_user
+from app.services.token_service import insert_token, revoke_token, token_revoke
+from app.models.token import TokenData, TokenDataInDB
 from app.models.user import User, UserInDB
-from app.database import is_revoked, set_revoke_token
 from fastapi.exceptions import HTTPException
 from fastapi import status
 from app import configuration
@@ -31,27 +32,28 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)
-
-
 def authenticate_user(username: str, password: str):
-    user = get_user(database.db, username)
-    if not user:
+    user = get_user(UserInDB(username=username))
+    if user is None:
         return False
     if not verify_password(password, user.hashed_password):
         return False
     return user
 
 
-def create_access_token(data: dict, expires_delta: timedelta):
+def create_access_token(data: dict, expires_delta: timedelta, expires_date: datetime):
     to_encode = data.copy()
     expire = datetime.utcnow() + expires_delta
+    jti = str(uuid4())
     to_encode.update({"exp": expire})
-    to_encode.update({"id": str(uuid4())})
+    to_encode.update({"jti": jti})
+
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    token = TokenDataInDB(
+        jti = jti,
+        expire_at = expires_date,
+    )
+    ret = insert_token(token)
     return encoded_jwt
 
 credentials_exception = HTTPException(
@@ -65,17 +67,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         print (payload)
-        username: str = payload.get("username")
-        id: str = payload.get("id")
-        if username is None or id is None:
+        token_data = TokenDataInDB(**payload)
+        if token_data.username is None:
             raise credentials_exception
         # Verify if token not is revoked
-        if is_revoked(id):
+        if token_revoke(token_data):
             raise credentials_exception
-        token_data = TokenData(username=username, id=id)
     except JWTError:
         raise credentials_exception
-    user = get_user(database.db, username=token_data.username)
+    user = get_user(UserInDB(username=token_data.username))
     if user is None:
         raise credentials_exception
     return user
@@ -83,18 +83,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 async def get_revoke_token(token: str= Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("username")
-        id: str = payload.get("id")
-        if is_revoked(id):
+        token_data = TokenDataInDB(**payload)
+        if token_data.username is None:
             raise credentials_exception
-        if username is None or id is None:
+        if token_revoke(token_data):
             raise credentials_exception
-        token_data = TokenData(username=username, id=id)
+        ret = revoke_token(token_data)
+        return ret
     except JWTError:
         raise credentials_exception
-    set_revoke_token(id)
-    return id
-
 
 
 

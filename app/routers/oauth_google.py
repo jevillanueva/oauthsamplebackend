@@ -1,4 +1,7 @@
-from app.models.token import Token
+from app.utils.username_split import split_email
+from app.models.user import UserInDB
+from app.services.user_service import insert_or_update_user
+from app.models.token import Token, TokenDataInDB
 from datetime import datetime, timedelta
 from http.client import HTTPException
 
@@ -37,15 +40,25 @@ async def auth_server_side(request: Request):
     user = await oauth.google.parse_id_token(request, token)
     accessTokenExpires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     dateExpires = datetime.utcnow() + accessTokenExpires
+    print(user)
+    userDB = UserInDB(
+        username=user.get("email"),
+        email=user.get("email"),
+        picture=user.get("picture"),
+        given_name=user.get("given_name"),
+        family_name=user.get("family_name"),
+        disabled=False,
+    )
+    ret = insert_or_update_user(userDB)
     accessToken = create_access_token(
-        data={"username": user.get("email")}, expires_delta=accessTokenExpires
+        data={"username": user.get("email")}, expires_delta=accessTokenExpires, expires_date=dateExpires
     )
     return Token(
-            access_token=accessToken,
-            token_type="bearer",
-            expires=accessTokenExpires,
-            date_expires=dateExpires,
-        )
+        access_token=accessToken,
+        token_type="bearer",
+        expires=accessTokenExpires,
+        date_expires=dateExpires,
+    )
 
 
 @router.post("/auth/client")
@@ -61,8 +74,18 @@ async def auth_client_side(request: Request):
 
         accessTokenExpires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         dateExpires = datetime.utcnow() + accessTokenExpires
+        print(idInfo)
+        user = UserInDB(
+            username=idInfo.get("email"),
+            email=idInfo.get("email"),
+            picture=idInfo.get("picture"),
+            given_name=idInfo.get("given_name"),
+            family_name=idInfo.get("family_name"),
+            disabled=False,
+        )
+        ret = insert_or_update_user(user)
         accessToken = create_access_token(
-            data={"username": idInfo.get("email")}, expires_delta=accessTokenExpires
+            data={"username": user.username}, expires_delta=accessTokenExpires, expires_date=dateExpires
         )
         return Token(
             access_token=accessToken,
