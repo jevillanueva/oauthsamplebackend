@@ -1,3 +1,4 @@
+from starlette.responses import RedirectResponse
 from app.utils.username_split import split_email
 from app.models.user import UserInDB
 from app.services.user_service import insert_or_update_user
@@ -34,7 +35,7 @@ async def login(request: Request):
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/auth")
+@router.get("/auth", response_model=Token)
 async def auth_server_side(request: Request):
     token = await oauth.google.authorize_access_token(request)
     user = await oauth.google.parse_id_token(request, token)
@@ -61,7 +62,7 @@ async def auth_server_side(request: Request):
     )
 
 
-@router.post("/auth/client")
+@router.post("/auth/client", response_model=Token)
 async def auth_client_side(request: Request):
     try:
         body_bytes = await request.body()
